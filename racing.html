@@ -1,0 +1,344 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,user-scalable=no">
+<title>極速闖關賽車</title>
+<style>
+  html,body{margin:0;height:100%;background:#111;color:#fff;font-family:system-ui,"Microsoft JhengHei",sans-serif;overflow:hidden;touch-action:none}
+  #wrap{position:relative;height:100%;display:flex;align-items:center;justify-content:center}
+  canvas{height:100%;max-width:100%;aspect-ratio:2/3;background:#000;display:block}
+  .btns{position:absolute;bottom:14px;left:0;right:0;display:flex;justify-content:space-between;padding:0 14px;pointer-events:none}
+  .btns div{pointer-events:auto;width:84px;height:84px;border-radius:50%;background:rgba(255,255,255,.22);border:2px solid rgba(255,255,255,.5);display:flex;align-items:center;justify-content:center;font-size:36px;user-select:none;-webkit-user-select:none}
+  .btns div:active{background:rgba(255,255,255,.5)}
+  @media (hover:hover) and (pointer:fine){.btns{display:none}}
+</style>
+</head>
+<body>
+<div id="wrap">
+  <canvas id="c" width="480" height="720"></canvas>
+  <div class="btns">
+    <div id="bl">◀</div>
+    <div id="bn">🚀</div>
+    <div id="br">▶</div>
+  </div>
+</div>
+<script>
+(()=>{
+const cv=document.getElementById('c'),ctx=cv.getContext('2d');
+const W=480,H=720,ROAD_W=320,RX=(W-ROAD_W)/2;
+const PY=H-150; // player y
+
+// ---------- audio ----------
+let ac;
+function beep(f,d=.1,type='square',v=.08){
+  try{ac=ac||new (window.AudioContext||window.webkitAudioContext)();
+  const o=ac.createOscillator(),g=ac.createGain();o.type=type;o.frequency.value=f;
+  g.gain.value=v;g.gain.exponentialRampToValueAtTime(.001,ac.currentTime+d);
+  o.connect(g).connect(ac.destination);o.start();o.stop(ac.currentTime+d);}catch(e){}
+}
+
+// ---------- levels ----------
+const LEVELS=[
+ {name:'叢林挑戰',icon:'🌴',goal:6000,base:'#2e7d32',side:'#1b5e20',road:'#4e4a44',line:'#e8e0c0',edge:'#6d4c41',
+  decor:['🌴','🌳','🌿','🌲'],
+  obs:[['🐒',.9],['🐘',.5],['🐍',.8],['🦍',.6],['🐅',.5]],
+  groups:['herd','herd'],hazards:['🪵','🪨'],spawn:.95,maxSpeed:420,tip:'小心過馬路的動物!'},
+ {name:'沙漠挑戰',icon:'🏜️',goal:8000,base:'#e0b560',side:'#d4a24c',road:'#6b5d4d',line:'#fff3c4',edge:'#b8893a',
+  decor:['🌵','🌵','🪨','🦴'],
+  obs:[['🐪',.9],['🦂',.8],['🐍',.6],['🦎',.7]],
+  groups:['herd','convoy'],hazards:['🌵','🪨'],spawn:1.05,maxSpeed:470,tip:'駱駝隊與沙漠車隊來了!'},
+ {name:'城市挑戰',icon:'🏙️',goal:10000,base:'#546e7a',side:'#37474f',road:'#3a3a3f',line:'#ffffff',edge:'#9e9e9e',
+  decor:['🏢','🏬','🏠','🌳','🚏'],
+  obs:[['🐕',.7],['🐈',.6],['🚶',.7],['🛵',.5]],
+  groups:['crowd','convoy','traffic'],hazards:['🚧','🛢️'],spawn:1.2,maxSpeed:520,tip:'人群過馬路,車流壅塞!'},
+ {name:'高速公路',icon:'🛣️',goal:13000,base:'#689f38',side:'#558b2f',road:'#2b2b30',line:'#ffd600',edge:'#eeeeee',
+  decor:['🌲','🪧','🌳','⚡'],
+  obs:[['🦌',.6],['🐄',.5],['🐗',.5]],
+  groups:['convoy','traffic','convoy'],hazards:['🚧','🛞'],spawn:1.35,maxSpeed:600,tip:'高速車隊與卡車集團!'}
+];
+
+// ---------- state ----------
+let S; // game state
+let state='menu'; // menu | play | levelup | over | win
+const keys={};
+let touchL=0,touchR=0,touchN=false;
+
+function newGame(){
+  S={lv:0,score:0,lives:3,best:+(localStorage.getItem('racebest')||0)};
+  startLevel();
+}
+function startLevel(){
+  const L=LEVELS[S.lv];
+  Object.assign(S,{
+    dist:0,speed:0,x:W/2,vx:0,nitro:100,nitroOn:false,inv:0,shake:0,flash:0,
+    objs:[],decor:[],spawnT:0,coinT:0,hazT:0,t:0,msg:L.name+' — '+L.tip,msgT:3,countdown:2.5
+  });
+  for(let y=0;y<H;y+=70){addDecor(y)}
+  state='play';
+}
+function addDecor(y){
+  const L=LEVELS[S.lv];
+  const left=Math.random()<.5;
+  S.decor.push({e:L.decor[Math.random()*L.decor.length|0],
+    x:left?Math.random()*(RX-34)+10:RX+ROAD_W+14+Math.random()*(RX-44),
+    y,s:28+Math.random()*26});
+}
+
+// ---------- spawning ----------
+const rnd=(a,b)=>a+Math.random()*(b-a);
+const carColors=['#e53935','#1e88e5','#fdd835','#8e24aa','#ff7043','#26a69a','#eceff1'];
+function laneX(i,n=4){return RX+ROAD_W/n*(i+.5)}
+function spawn(){
+  const L=LEVELS[S.lv];
+  const r=Math.random();
+  if(r<.45){ // single animal
+    const a=pick(L.obs);
+    S.objs.push({k:'animal',e:a[0],x:rnd(RX+30,RX+ROAD_W-30),y:-60,w:40,h:40,vy:0,vx:Math.random()<.5?rnd(40,90)*(Math.random()<.5?-1:1):0,sz:46});
+  }else{
+    const g=pick(L.groups);
+    ({herd,crowd,convoy,traffic}[g])();
+  }
+}
+const pick=a=>a[Math.random()*a.length|0];
+function herd(){ // animals crossing the road in a line with a gap
+  const L=LEVELS[S.lv],a=pick(L.obs)[0],dir=Math.random()<.5?1:-1;
+  const n=6,gap=Math.floor(rnd(1,n-1));
+  for(let i=0;i<n;i++){ if(i===gap||i===gap+1)continue;
+    S.objs.push({k:'animal',e:a,x:RX+ROAD_W/n*(i+.5),y:-60-Math.random()*20,w:36,h:36,vy:0,vx:dir*60,sz:42});}
+  if(Math.random()<.5)S.msg='⚠ 動物成群出沒!',S.msgT=1.5;
+}
+function crowd(){
+  const n=6,gap=Math.floor(rnd(0,n-1));
+  for(let i=0;i<n;i++){ if(i===gap||i===gap+1)continue;
+    S.objs.push({k:'animal',e:pick(['🚶','🚶‍♀️','🧍','🏃']),x:RX+ROAD_W/n*(i+.5),y:-60-Math.random()*30,w:30,h:36,vy:0,vx:rnd(-30,30),sz:40});}
+  S.msg='⚠ 行人集團過馬路!',S.msgT=1.5;
+}
+function convoy(){ // column of trucks / cars in one or two lanes, moving slowly
+  const lane=Math.floor(rnd(0,4)),len=3+Math.floor(rnd(0,2));
+  const sp=rnd(120,200),two=Math.random()<.35,l2=(lane+1)%4;
+  const truck=Math.random()<.5,col=pick(carColors);
+  for(let i=0;i<len;i++){
+    S.objs.push({k:'car',x:laneX(lane),y:-90-i*(truck?210:170),w:truck?46:38,h:truck?150:70,vy:sp,vx:0,col,truck});
+    if(two&&Math.abs(l2-lane)===1)S.objs.push({k:'car',x:laneX(l2),y:-90-i*(truck?210:170),w:truck?46:38,h:truck?150:70,vy:sp,vx:0,col:pick(carColors),truck});
+  }
+  S.msg='⚠ 車隊來了!',S.msgT=1.5;
+}
+function traffic(){ // fast cars on 3 lanes, one free lane
+  const free=Math.floor(rnd(0,4));
+  for(let i=0;i<4;i++){ if(i===free)continue;
+    S.objs.push({k:'car',x:laneX(i),y:-90-Math.random()*120,w:38,h:70,vy:rnd(150,260),vx:0,col:pick(carColors)});}
+}
+function spawnHazard(){
+  const L=LEVELS[S.lv];
+  S.objs.push({k:'haz',e:pick(L.hazards),x:rnd(RX+25,RX+ROAD_W-25),y:-50,w:34,h:34,vy:0,vx:0,sz:40});
+}
+function spawnCoin(){
+  const x=rnd(RX+30,RX+ROAD_W-30);
+  for(let i=0;i<4;i++)S.objs.push({k:'coin',e:'⭐',x,y:-40-i*50,w:30,h:30,vy:0,vx:0,sz:32});
+}
+
+// ---------- update ----------
+function update(dt){
+  if(state!=='play')return;
+  const L=LEVELS[S.lv];
+  S.t+=dt;
+  if(S.countdown>0){S.countdown-=dt;if(S.countdown>0)return;}
+  // input
+  const left=keys.ArrowLeft||keys.a||keys.A||touchL, right=keys.ArrowRight||keys.d||keys.D||touchR;
+  const up=keys.ArrowUp||keys.w||keys.W, down=keys.ArrowDown||keys.s||keys.S;
+  const nitroKey=keys[' ']||keys.Shift||touchN;
+  S.nitroOn=nitroKey&&S.nitro>0&&S.speed>100;
+  let target=L.maxSpeed*(down?.35:1);
+  if(S.nitroOn){target=L.maxSpeed*1.5;S.nitro=Math.max(0,S.nitro-35*dt)}
+  else S.nitro=Math.min(100,S.nitro+6*dt);
+  const acc=(S.speed<target?170:300);
+  S.speed+=Math.sign(target-S.speed)*Math.min(Math.abs(target-S.speed),acc*dt);
+  if(S.inv>0)S.speed=Math.min(S.speed,L.maxSpeed*.55);
+  const steer=(right?1:0)-(left?1:0);
+  S.vx+=(steer*420-S.vx)*Math.min(1,dt*8);
+  S.x+=S.vx*dt*(.4+S.speed/L.maxSpeed*.6);
+  const lim=RX+24,lim2=RX+ROAD_W-24;
+  if(S.x<lim){S.x=lim;S.vx=0;S.speed*=1-.6*dt}
+  if(S.x>lim2){S.x=lim2;S.vx=0;S.speed*=1-.6*dt}
+  S.dist+=S.speed*dt;
+  S.score+=S.speed*dt*.02;
+  if(S.inv>0)S.inv-=dt;
+  if(S.shake>0)S.shake-=dt;
+  if(S.msgT>0)S.msgT-=dt;
+
+  // spawn by distance
+  const rate=S.speed/L.maxSpeed;
+  S.spawnT-=dt*rate*L.spawn;
+  if(S.spawnT<=0){spawn();S.spawnT=rnd(1.3,2.2)}
+  S.hazT-=dt*rate;
+  if(S.hazT<=0){spawnHazard();S.hazT=rnd(1.2,2.6)}
+  S.coinT-=dt*rate;
+  if(S.coinT<=0){spawnCoin();S.coinT=rnd(3,5)}
+
+  // move
+  for(const o of S.objs){
+    o.y+=(S.speed-o.vy)*dt;
+    o.x+=o.vx*dt;
+    if(o.k==='animal'&&(o.x<RX-60||o.x>RX+ROAD_W+60))o.dead=true;
+  }
+  for(const d of S.decor)d.y+=S.speed*dt;
+  S.decor=S.decor.filter(d=>d.y<H+60);
+  if(!S.decor.length||S.decor[0].y>70)addDecor(-40);
+  S.decor.sort((a,b)=>a.y-b.y);
+
+  // collisions
+  for(const o of S.objs){
+    if(o.dead)continue;
+    if(Math.abs(o.x-S.x)<(o.w+30)/2-3&&Math.abs(o.y-PY)<(o.h+66)/2-4){
+      if(o.k==='coin'){o.dead=true;S.score+=50;S.nitro=Math.min(100,S.nitro+8);beep(880,.08,'sine')}
+      else if(S.inv<=0){
+        o.dead=o.k!=='car';S.lives--;S.inv=2;S.shake=.4;S.flash=.3;S.speed*=.3;
+        beep(110,.3,'sawtooth',.15);
+        if(S.lives<=0){gameOver();return}
+        if(o.k==='car'){S.objs.forEach(p=>{if(p!==o&&p.k==='car'&&Math.abs(p.y-PY)<120&&Math.abs(p.x-S.x)<60)p.dead=true});o.dead=true}
+      }
+    }
+  }
+  S.objs=S.objs.filter(o=>!o.dead&&o.y<H+200&&o.y>-900);
+
+  if(S.dist>=L.goal){
+    S.score+=Math.round(1000+S.lives*300);
+    if(S.lv>=LEVELS.length-1){state='win';save()}else{state='levelup'}
+    beep(660,.15);setTimeout(()=>beep(990,.3),150);
+  }
+}
+function save(){S.best=Math.max(S.best,Math.round(S.score));localStorage.setItem('racebest',S.best)}
+function gameOver(){state='over';save()}
+
+// ---------- drawing ----------
+function drawCar(x,y,w,h,col,player,truck){
+  ctx.save();ctx.translate(x,y);
+  ctx.fillStyle='rgba(0,0,0,.3)';ctx.fillRect(-w/2+3,-h/2+4,w,h);
+  if(truck){
+    ctx.fillStyle='#cfd8dc';ctx.fillRect(-w/2,-h/2,w,h*.7);
+    ctx.fillStyle=col;ctx.fillRect(-w/2,h*.2,w,h*.3);
+    ctx.fillStyle='#263238';ctx.fillRect(-w/2+4,h*.3,w-8,10);
+    ctx.fillStyle='#fff8';ctx.fillRect(-w/2+3,-h/2+3,w-6,6);
+  }else{
+    ctx.fillStyle=col;rr(-w/2,-h/2,w,h,9);ctx.fill();
+    ctx.fillStyle='#263238';rr(-w/2+5,-h/2+(player?14:h*.6-18),w-10,player?18:16,4);ctx.fill();
+    ctx.fillStyle='rgba(255,255,255,.25)';ctx.fillRect(-2,-h/2+2,4,h-4);
+    ctx.fillStyle='#111';ctx.fillRect(-w/2-3,-h/2+8,5,14);ctx.fillRect(w/2-2,-h/2+8,5,14);
+    ctx.fillRect(-w/2-3,h/2-22,5,14);ctx.fillRect(w/2-2,h/2-22,5,14);
+    ctx.fillStyle=player?'#fff59d':'#ff1744';
+    if(player){ctx.fillRect(-w/2+4,-h/2,7,4);ctx.fillRect(w/2-11,-h/2,7,4)}
+    else{ctx.fillRect(-w/2+4,h/2-4,7,4);ctx.fillRect(w/2-11,h/2-4,7,4)}
+  }
+  ctx.restore();
+}
+function rr(x,y,w,h,r){ctx.beginPath();ctx.moveTo(x+r,y);ctx.arcTo(x+w,y,x+w,y+h,r);ctx.arcTo(x+w,y+h,x,y+h,r);ctx.arcTo(x,y+h,x,y,r);ctx.arcTo(x,y,x+w,y,r);ctx.closePath()}
+function emoji(e,x,y,s){ctx.font=s+'px serif';ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillText(e,x,y)}
+
+function draw(){
+  const L=LEVELS[(S&&S.lv)||0];
+  ctx.save();
+  if(S&&S.shake>0)ctx.translate(rnd(-5,5),rnd(-5,5));
+  // background
+  ctx.fillStyle=L.base;ctx.fillRect(0,0,W,H);
+  ctx.fillStyle=L.side;
+  const off=S?S.dist%80:0;
+  for(let y=-80;y<H;y+=80){ctx.fillRect(0,y+off,RX-8,40);ctx.fillRect(RX+ROAD_W+8,y+off,RX-8,40)}
+  // road
+  ctx.fillStyle=L.edge;ctx.fillRect(RX-8,0,ROAD_W+16,H);
+  ctx.fillStyle=L.road;ctx.fillRect(RX,0,ROAD_W,H);
+  ctx.fillStyle=L.line;
+  const lo=S?S.dist%60:0;
+  for(let i=1;i<4;i++)for(let y=-60;y<H;y+=60)ctx.fillRect(RX+ROAD_W/4*i-2,y+lo,4,30);
+  if(S){
+    // decor
+    for(const d of S.decor)emoji(d.e,d.x,d.y,d.s);
+    // objects
+    for(const o of S.objs){
+      if(o.k==='car')drawCar(o.x,o.y,o.w,o.h,o.col,false,o.truck);
+      else{
+        if(o.k==='coin'){ctx.save();ctx.shadowColor='#ffeb3b';ctx.shadowBlur=12;emoji(o.e,o.x,o.y,o.sz);ctx.restore()}
+        else emoji(o.e,o.x,o.y,o.sz);
+      }
+    }
+    // player
+    if(!(S.inv>0&&Math.floor(S.t*14)%2)){
+      if(S.nitroOn){ctx.fillStyle='#ff9800';ctx.beginPath();ctx.moveTo(S.x-10,PY+36);ctx.lineTo(S.x,PY+36+30+Math.random()*20);ctx.lineTo(S.x+10,PY+36);ctx.fill()}
+      drawCar(S.x,PY,32,68,'#ff1744',true);
+    }
+    if(S.flash>0){S.flash-=1/60;ctx.fillStyle='rgba(255,0,0,'+S.flash+')';ctx.fillRect(0,0,W,H)}
+    if(S.nitroOn){ctx.strokeStyle='rgba(255,255,255,.35)';for(let i=0;i<14;i++){const x=rnd(0,W),y=rnd(0,H);ctx.beginPath();ctx.moveTo(x,y);ctx.lineTo(x,y+40);ctx.stroke()}}
+    hud(L);
+  }
+  ctx.restore();
+  overlay(L);
+}
+function hud(L){
+  ctx.textAlign='left';ctx.textBaseline='top';
+  ctx.fillStyle='rgba(0,0,0,.55)';ctx.fillRect(0,0,W,58);
+  ctx.fillStyle='#fff';ctx.font='bold 17px system-ui,sans-serif';
+  ctx.fillText(L.icon+' 第'+(S.lv+1)+'關 '+L.name,10,8);
+  ctx.fillText('❤️'.repeat(Math.max(0,S.lives)),10,32);
+  ctx.textAlign='right';ctx.fillText('分數 '+Math.round(S.score),W-10,8);
+  ctx.fillText(Math.round(S.speed/4)+' km/h',W-10,32);
+  // progress bar
+  const p=Math.min(1,S.dist/L.goal);
+  ctx.fillStyle='rgba(255,255,255,.25)';ctx.fillRect(130,34,150,10);
+  ctx.fillStyle='#4caf50';ctx.fillRect(130,34,150*p,10);
+  ctx.font='14px serif';ctx.textAlign='center';ctx.fillText('🏁',284,32);
+  // nitro bar
+  ctx.fillStyle='rgba(0,0,0,.5)';ctx.fillRect(W-16,70,10,150);
+  ctx.fillStyle='#ff9800';ctx.fillRect(W-16,70+150*(1-S.nitro/100),10,150*S.nitro/100);
+  ctx.font='14px serif';ctx.fillText('🚀',W-11,226);
+  if(S.msgT>0&&S.countdown<=0){
+    ctx.globalAlpha=Math.min(1,S.msgT);ctx.fillStyle='rgba(0,0,0,.6)';ctx.fillRect(0,100,W,36);
+    ctx.fillStyle='#ffeb3b';ctx.font='bold 18px system-ui,sans-serif';ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillText(S.msg,W/2,118);ctx.globalAlpha=1;
+  }
+  if(S.countdown>0){
+    ctx.fillStyle='rgba(0,0,0,.45)';ctx.fillRect(0,0,W,H);
+    ctx.fillStyle='#fff';ctx.textAlign='center';ctx.textBaseline='middle';ctx.font='bold 40px system-ui,sans-serif';
+    ctx.fillText(L.icon+' '+L.name,W/2,H/2-60);
+    ctx.font='bold 90px system-ui,sans-serif';ctx.fillText(S.countdown>.5?Math.ceil(S.countdown-.5):'GO!',W/2,H/2+20);
+  }
+}
+function panel(title,lines,btn,color='#ffeb3b'){
+  ctx.fillStyle='rgba(0,0,0,.75)';ctx.fillRect(0,0,W,H);
+  ctx.textAlign='center';ctx.textBaseline='middle';
+  ctx.fillStyle=color;ctx.font='bold 44px system-ui,sans-serif';ctx.fillText(title,W/2,200);
+  ctx.fillStyle='#fff';ctx.font='20px system-ui,sans-serif';
+  lines.forEach((t,i)=>ctx.fillText(t,W/2,270+i*34));
+  if(Math.floor(performance.now()/500)%2){ctx.fillStyle=color;ctx.font='bold 24px system-ui,sans-serif';ctx.fillText(btn,W/2,560)}
+}
+function overlay(L){
+  if(state==='menu')panel('🏎️ 極速闖關賽車',['🌴 叢林 → 🏜️ 沙漠 → 🏙️ 城市 → 🛣️ 高速公路','閃避動物、行人與車隊集團!','← → / A D 轉向 ・ ↑ 加速 ・ ↓ 減速','空白鍵 / 🚀 氮氣加速 ・ 收集 ⭐ 補充氮氣','最高分:'+(S?S.best:+(localStorage.getItem('racebest')||0))],'按 Enter / 點擊畫面 開始');
+  if(state==='levelup')panel('✅ 過關!',[L.name+' 完成','目前分數 '+Math.round(S.score),'剩餘生命 '+'❤️'.repeat(S.lives),'下一關:'+LEVELS[S.lv+1].icon+' '+LEVELS[S.lv+1].name],'按 Enter / 點擊 繼續','#69f0ae');
+  if(state==='over')panel('💥 撞車了',['在「'+L.name+'」失敗','分數 '+Math.round(S.score),'最高分 '+S.best],'按 Enter / 點擊 重新開始','#ff5252');
+  if(state==='win')panel('🏆 全部通關!',['你是賽車冠軍!','總分 '+Math.round(S.score),'最高分 '+S.best],'按 Enter / 點擊 再玩一次','#ffd740');
+}
+
+// ---------- input ----------
+function action(){
+  if(state==='menu'||state==='over'||state==='win'){newGame()}
+  else if(state==='levelup'){S.lv++;startLevel()}
+}
+addEventListener('keydown',e=>{keys[e.key]=true;if(e.key==='Enter')action();if(e.key.startsWith('Arrow')||e.key===' ')e.preventDefault()});
+addEventListener('keyup',e=>keys[e.key]=false);
+cv.addEventListener('pointerdown',()=>{if(state!=='play'){action()}});
+function hold(id,on,off){const el=document.getElementById(id);
+  el.addEventListener('pointerdown',e=>{e.preventDefault();on()});
+  ['pointerup','pointerleave','pointercancel'].forEach(t=>el.addEventListener(t,off));}
+hold('bl',()=>touchL=1,()=>touchL=0);hold('br',()=>touchR=1,()=>touchR=0);hold('bn',()=>touchN=true,()=>touchN=false);
+
+// ---------- loop ----------
+let last=performance.now();
+function loop(now){
+  const dt=Math.min(.05,(now-last)/1000);last=now;
+  update(dt);draw();requestAnimationFrame(loop);
+}
+S={lv:0,best:+(localStorage.getItem('racebest')||0),score:0,lives:3,objs:[],decor:[],dist:0,speed:0,x:W/2,t:0,nitro:100,inv:0,shake:0,flash:0,msgT:0,countdown:0};
+startLevel();state='menu';
+requestAnimationFrame(loop);
+})();
+</script>
+</body>
+</html>
