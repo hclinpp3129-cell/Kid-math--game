@@ -95,6 +95,14 @@
       </div>
     </div>
 
+    <div class="card">
+      <h2>題型</h2>
+      <div class="chips" id="kinds">
+        <button class="chip on" data-kind="all">全部題目</button>
+        <button class="chip" data-kind="carry">🔁 進位／借位</button>
+      </div>
+    </div>
+
     <button class="big add" data-mode="add">➕ 加法挑戰</button>
     <button class="big sub" data-mode="sub">➖ 減法挑戰</button>
     <button class="big mix" data-mode="mix">🎲 加減混合</button>
@@ -110,6 +118,7 @@
     </div>
     <div class="progress"><i id="bar"></i></div>
     <div class="card">
+      <div class="visual" id="tag" style="font-weight:800;min-height:1.6rem;color:var(--mix)"></div>
       <div class="visual" id="visual"></div>
       <div class="question" id="question"></div>
     </div>
@@ -136,7 +145,7 @@
   const show = id => document.querySelectorAll('.screen').forEach(s => s.classList.toggle('active', s.id === id));
   const rnd = (a, b) => Math.floor(Math.random() * (b - a + 1)) + a;
 
-  let level = 50, mode = 'add';
+  let level = 50, mode = 'add', kind = 'all';
   let q, idx, stars, firstTry, locked;
 
   // 本機最高紀錄（無法儲存時不影響遊戲）
@@ -144,7 +153,7 @@
     get(k) { try { return localStorage.getItem(k); } catch (e) { return null; } },
     set(k, v) { try { localStorage.setItem(k, v); } catch (e) {} }
   };
-  const bestKey = () => `best-${mode}-${level}`;
+  const bestKey = () => `best-${mode}-${level}${kind === 'carry' ? '-c' : ''}`;
   const names = { add: '加法', sub: '減法', mix: '加減混合' };
 
   // 簡單音效
@@ -171,14 +180,14 @@
 
   function refreshBest() {
     const lines = ['add', 'sub', 'mix'].map(m => {
-      const b = store.get(`best-${m}-${level}`);
+      const b = store.get(`best-${m}-${level}${kind === 'carry' ? '-c' : ''}`);
       return b ? `${names[m]} ${b}⭐` : null;
     }).filter(Boolean);
     $('bestLine').textContent = lines.length ? '🏅 最高紀錄：' + lines.join('　') : '';
   }
 
   // 出題：加法不超過上限；減法不出現負數
-  function makeQuestion() {
+  function rawQuestion() {
     const op = mode === 'mix' ? (Math.random() < 0.5 ? 'add' : 'sub') : mode;
     let a, b, ans;
     if (op === 'add') {
@@ -194,6 +203,26 @@
     const sign = op === 'add' ? '+' : '−';
     // 隨機把空格放在答案位置（多數）或第二個數字（少數）
     return { op, a, b, ans, sign };
+  }
+
+  // 進位：個位相加 ≥ 10；借位：個位不夠減
+  const needsRegroup = q => q.op === 'add' ? (q.a % 10) + (q.b % 10) >= 10 : (q.a % 10) < (q.b % 10);
+
+  function makeQuestion() {
+    let r = rawQuestion();
+    if (kind === 'carry') {
+      for (let i = 0; i < 500 && !needsRegroup(r); i++) r = rawQuestion();
+    }
+    r.regroup = needsRegroup(r);
+    return r;
+  }
+
+  function hint(q) {
+    if (!q.regroup) return '';
+    const ao = q.a % 10, bo = q.b % 10;
+    return q.op === 'add'
+      ? `<div style="font-size:1.1rem">個位 ${ao} + ${bo} = ${ao + bo}，滿 10 了，要向十位進 1！</div>`
+      : `<div style="font-size:1.1rem">個位 ${ao} 不夠減 ${bo}，要向十位借 1，變成 ${ao + 10} − ${bo}！</div>`;
   }
 
   function makeChoices(ans) {
@@ -230,6 +259,7 @@
     $('starCount').textContent = '⭐ ' + stars;
     $('question').innerHTML = `${q.a} ${q.sign} ${q.b} = <span class="blank">?</span>`;
     $('visual').innerHTML = '';
+    $('tag').textContent = q.regroup ? (q.op === 'add' ? '🔁 進位題' : '🔁 借位題') : '';
     $('msg').textContent = '';
     const box = $('choices');
     box.innerHTML = '';
@@ -260,7 +290,7 @@
       btn.classList.add('wrong');
       firstTry = false;
       $('msg').textContent = retry[rnd(0, retry.length - 1)];
-      $('visual').innerHTML = visual(q); // 答錯後出現數數小幫手
+      $('visual').innerHTML = visual(q) + hint(q); // 答錯後出現小幫手
       sfx.no();
     }
   }
@@ -315,6 +345,11 @@
   document.querySelectorAll('#levels .chip').forEach(c => c.onclick = () => {
     level = +c.dataset.level;
     document.querySelectorAll('#levels .chip').forEach(x => x.classList.toggle('on', x === c));
+    refreshBest();
+  });
+  document.querySelectorAll('#kinds .chip').forEach(c => c.onclick = () => {
+    kind = c.dataset.kind;
+    document.querySelectorAll('#kinds .chip').forEach(x => x.classList.toggle('on', x === c));
     refreshBest();
   });
   $('quit').onclick = () => { show('home'); refreshBest(); };
