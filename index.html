@@ -1,0 +1,328 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no">
+<title>小二數學樂園</title>
+<style>
+  :root {
+    --bg1: #fff4c2; --bg2: #ffd6e8;
+    --ink: #3b2f63; --card: #ffffff;
+    --add: #34c38f; --sub: #ff8a5b; --mix: #7b6cff;
+    --good: #2fbf71; --bad: #ff6b6b;
+  }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body { margin: 0; height: 100%; }
+  body {
+    font-family: "PingFang TC", "Microsoft JhengHei", "Noto Sans TC", system-ui, sans-serif;
+    color: var(--ink);
+    background: linear-gradient(160deg, var(--bg1), var(--bg2));
+    display: flex; justify-content: center; align-items: flex-start;
+    user-select: none;
+  }
+  #app { width: 100%; max-width: 560px; padding: 16px; min-height: 100%; }
+  .screen { display: none; animation: pop .35s ease; }
+  .screen.active { display: block; }
+  @keyframes pop { from { transform: scale(.94); opacity: 0; } to { transform: none; opacity: 1; } }
+
+  h1 { font-size: 2.2rem; text-align: center; margin: 12px 0 4px; }
+  .sub { text-align: center; font-size: 1.1rem; margin-bottom: 18px; }
+  .mascot { font-size: 4.5rem; text-align: center; animation: bounce 1.6s infinite; }
+  @keyframes bounce { 0%,100% { transform: translateY(0); } 50% { transform: translateY(-10px); } }
+
+  .card { background: var(--card); border-radius: 24px; padding: 18px; box-shadow: 0 6px 0 rgba(0,0,0,.08); margin-bottom: 16px; }
+  .card h2 { margin: 0 0 10px; font-size: 1.2rem; }
+
+  button { font: inherit; color: inherit; border: none; cursor: pointer; }
+  .big {
+    display: block; width: 100%; padding: 16px; margin: 10px 0;
+    font-size: 1.5rem; font-weight: 800; color: #fff; border-radius: 20px;
+    box-shadow: 0 6px 0 rgba(0,0,0,.18); transition: transform .08s, box-shadow .08s;
+  }
+  .big:active { transform: translateY(4px); box-shadow: 0 2px 0 rgba(0,0,0,.18); }
+  .big.add { background: var(--add); } .big.sub { background: var(--sub); } .big.mix { background: var(--mix); }
+
+  .chips { display: flex; gap: 10px; }
+  .chip {
+    flex: 1; padding: 12px 6px; font-size: 1.1rem; font-weight: 700; border-radius: 16px;
+    background: #f1ecff; border: 3px solid transparent;
+  }
+  .chip.on { background: #fff; border-color: var(--mix); }
+
+  .topbar { display: flex; justify-content: space-between; align-items: center; font-size: 1.2rem; font-weight: 800; margin-bottom: 10px; }
+  .home { background: #fff; border-radius: 14px; padding: 6px 12px; font-size: 1.1rem; box-shadow: 0 3px 0 rgba(0,0,0,.1); }
+  .progress { height: 14px; background: rgba(255,255,255,.7); border-radius: 10px; overflow: hidden; margin-bottom: 14px; }
+  .progress i { display: block; height: 100%; width: 0; background: linear-gradient(90deg, #ffb703, #fb5607); transition: width .3s; }
+
+  .question { text-align: center; font-size: 3.4rem; font-weight: 900; letter-spacing: 2px; padding: 20px 8px; }
+  .question .blank { display: inline-block; min-width: 1.6em; border-bottom: 5px dashed var(--mix); color: var(--mix); }
+  .visual { text-align: center; min-height: 2.4rem; font-size: 1.5rem; line-height: 1.3; margin-bottom: 6px; word-break: break-all; }
+
+  .choices { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+  .choice {
+    padding: 22px 0; font-size: 2.4rem; font-weight: 900; background: #fff; border-radius: 22px;
+    box-shadow: 0 6px 0 rgba(0,0,0,.12); transition: transform .08s;
+  }
+  .choice:active { transform: translateY(4px); }
+  .choice.right { background: var(--good); color: #fff; }
+  .choice.wrong { background: var(--bad); color: #fff; animation: shake .4s; }
+  @keyframes shake { 25% { transform: translateX(-8px); } 75% { transform: translateX(8px); } }
+
+  .msg { text-align: center; font-size: 1.5rem; font-weight: 800; min-height: 2.2rem; margin-top: 14px; }
+
+  .stars { text-align: center; font-size: 2.6rem; margin: 6px 0; }
+  .score { text-align: center; font-size: 1.6rem; font-weight: 800; margin: 8px 0; }
+  .best { text-align: center; font-size: 1.1rem; opacity: .8; }
+  .confetti { position: fixed; top: -20px; font-size: 1.8rem; pointer-events: none; animation: fall linear forwards; z-index: 9; }
+  @keyframes fall { to { transform: translateY(110vh) rotate(360deg); } }
+</style>
+</head>
+<body>
+<div id="app">
+
+  <!-- 首頁 -->
+  <section id="home" class="screen active">
+    <div class="mascot">🦊</div>
+    <h1>小二數學樂園</h1>
+    <div class="sub">選一個遊戲，一起來闖關吧！</div>
+
+    <div class="card">
+      <h2>難度</h2>
+      <div class="chips" id="levels">
+        <button class="chip" data-level="20">🌱 20 以內</button>
+        <button class="chip on" data-level="50">🌳 50 以內</button>
+        <button class="chip" data-level="100">🌲 100 以內</button>
+      </div>
+    </div>
+
+    <button class="big add" data-mode="add">➕ 加法挑戰</button>
+    <button class="big sub" data-mode="sub">➖ 減法挑戰</button>
+    <button class="big mix" data-mode="mix">🎲 加減混合</button>
+    <div class="best" id="bestLine"></div>
+  </section>
+
+  <!-- 遊戲 -->
+  <section id="game" class="screen">
+    <div class="topbar">
+      <button class="home" id="quit">🏠 回首頁</button>
+      <span id="qNum">第 1 / 10 題</span>
+      <span id="starCount">⭐ 0</span>
+    </div>
+    <div class="progress"><i id="bar"></i></div>
+    <div class="card">
+      <div class="visual" id="visual"></div>
+      <div class="question" id="question"></div>
+    </div>
+    <div class="choices" id="choices"></div>
+    <div class="msg" id="msg"></div>
+  </section>
+
+  <!-- 結果 -->
+  <section id="result" class="screen">
+    <div class="mascot" id="rMascot">🏆</div>
+    <h1 id="rTitle">太棒了！</h1>
+    <div class="stars" id="rStars"></div>
+    <div class="score" id="rScore"></div>
+    <div class="best" id="rBest"></div>
+    <button class="big add" id="again">🔁 再玩一次</button>
+    <button class="big mix" id="toHome">🏠 回首頁</button>
+  </section>
+</div>
+
+<script>
+(() => {
+  const TOTAL = 10;
+  const $ = id => document.getElementById(id);
+  const show = id => document.querySelectorAll('.screen').forEach(s => s.classList.toggle('active', s.id === id));
+  const rnd = (a, b) => Math.floor(Math.random() * (b - a + 1)) + a;
+
+  let level = 50, mode = 'add';
+  let q, idx, stars, firstTry, locked;
+
+  // 本機最高紀錄（無法儲存時不影響遊戲）
+  const store = {
+    get(k) { try { return localStorage.getItem(k); } catch (e) { return null; } },
+    set(k, v) { try { localStorage.setItem(k, v); } catch (e) {} }
+  };
+  const bestKey = () => `best-${mode}-${level}`;
+  const names = { add: '加法', sub: '減法', mix: '加減混合' };
+
+  // 簡單音效
+  let ac;
+  function beep(freqs, dur = 0.12) {
+    try {
+      ac = ac || new (window.AudioContext || window.webkitAudioContext)();
+      freqs.forEach((f, i) => {
+        const o = ac.createOscillator(), g = ac.createGain();
+        o.type = 'triangle'; o.frequency.value = f;
+        const t = ac.currentTime + i * dur;
+        g.gain.setValueAtTime(0.25, t);
+        g.gain.exponentialRampToValueAtTime(0.001, t + dur);
+        o.connect(g); g.connect(ac.destination);
+        o.start(t); o.stop(t + dur);
+      });
+    } catch (e) {}
+  }
+  const sfx = {
+    ok: () => beep([660, 880]),
+    no: () => beep([220, 180], 0.15),
+    win: () => beep([523, 659, 784, 1047], 0.15)
+  };
+
+  function refreshBest() {
+    const lines = ['add', 'sub', 'mix'].map(m => {
+      const b = store.get(`best-${m}-${level}`);
+      return b ? `${names[m]} ${b}⭐` : null;
+    }).filter(Boolean);
+    $('bestLine').textContent = lines.length ? '🏅 最高紀錄：' + lines.join('　') : '';
+  }
+
+  // 出題：加法不超過上限；減法不出現負數
+  function makeQuestion() {
+    const op = mode === 'mix' ? (Math.random() < 0.5 ? 'add' : 'sub') : mode;
+    let a, b, ans;
+    if (op === 'add') {
+      ans = rnd(Math.min(5, level), level);
+      a = rnd(1, ans - 1 || 1);
+      b = ans - a;
+    } else {
+      a = rnd(Math.min(5, level), level);
+      b = rnd(1, a - 1 || 1);
+      ans = a - b;
+    }
+    // 難題（含進位／借位）自然出現；避免整題都太簡單
+    const sign = op === 'add' ? '+' : '−';
+    // 隨機把空格放在答案位置（多數）或第二個數字（少數）
+    return { op, a, b, ans, sign };
+  }
+
+  function makeChoices(ans) {
+    const set = new Set([ans]);
+    const span = Math.max(3, Math.round(level / 10));
+    let guard = 0;
+    while (set.size < 4 && guard++ < 100) {
+      let d = rnd(1, span) * (Math.random() < 0.5 ? -1 : 1);
+      // 常見錯誤：差 10 或 ±1
+      if (Math.random() < 0.25) d = Math.random() < 0.5 ? 10 : -10;
+      const v = ans + d;
+      if (v >= 0 && v <= level) set.add(v);
+    }
+    while (set.size < 4) set.add(rnd(0, level));
+    return [...set].sort(() => Math.random() - 0.5);
+  }
+
+  function visual(q) {
+    // 20 以內用表情符號幫忙數數；大一點的數字用「十」和「一」積木
+    if (level <= 20 || (q.a <= 20 && q.b <= 20)) {
+      const dots = (n, e) => e.repeat(n);
+      return q.op === 'add'
+        ? `${dots(q.a, '🍎')} ${dots(q.b, '🍏')}`
+        : `${dots(q.a - q.b, '🍎')}<span style="opacity:.3">${dots(q.b, '🍎')}</span>`;
+    }
+    return '';
+  }
+
+  function render() {
+    q = makeQuestion();
+    firstTry = true; locked = false;
+    $('qNum').textContent = `第 ${idx + 1} / ${TOTAL} 題`;
+    $('bar').style.width = (idx / TOTAL * 100) + '%';
+    $('starCount').textContent = '⭐ ' + stars;
+    $('question').innerHTML = `${q.a} ${q.sign} ${q.b} = <span class="blank">?</span>`;
+    $('visual').innerHTML = '';
+    $('msg').textContent = '';
+    const box = $('choices');
+    box.innerHTML = '';
+    makeChoices(q.ans).forEach(v => {
+      const btn = document.createElement('button');
+      btn.className = 'choice';
+      btn.textContent = v;
+      btn.onclick = () => pick(btn, v);
+      box.appendChild(btn);
+    });
+  }
+
+  const praise = ['答對了！太厲害了！🎉', '好棒喔！👏', '你真聰明！🌟', '耶！完全正確！🥳', '讚讚讚！👍'];
+  const retry = ['再想一想，你可以的！💪', '差一點點，再試一次！🙂', '別氣餒，加油！🌈'];
+
+  function pick(btn, v) {
+    if (locked || btn.classList.contains('wrong')) return;
+    if (v === q.ans) {
+      locked = true;
+      btn.classList.add('right');
+      $('question').innerHTML = `${q.a} ${q.sign} ${q.b} = <span class="blank">${q.ans}</span>`;
+      $('msg').textContent = praise[rnd(0, praise.length - 1)];
+      if (firstTry) stars++;
+      $('starCount').textContent = '⭐ ' + stars;
+      sfx.ok();
+      setTimeout(next, 1100);
+    } else {
+      btn.classList.add('wrong');
+      firstTry = false;
+      $('msg').textContent = retry[rnd(0, retry.length - 1)];
+      $('visual').innerHTML = visual(q); // 答錯後出現數數小幫手
+      sfx.no();
+    }
+  }
+
+  function next() {
+    idx++;
+    if (idx >= TOTAL) return finish();
+    render();
+  }
+
+  function confetti() {
+    const items = ['🎉', '⭐', '🎈', '✨', '🌟', '🍭'];
+    for (let i = 0; i < 28; i++) {
+      const s = document.createElement('div');
+      s.className = 'confetti';
+      s.textContent = items[rnd(0, items.length - 1)];
+      s.style.left = rnd(0, 95) + 'vw';
+      s.style.animationDuration = (2 + Math.random() * 2) + 's';
+      s.style.animationDelay = Math.random() * .8 + 's';
+      document.body.appendChild(s);
+      setTimeout(() => s.remove(), 5000);
+    }
+  }
+
+  function finish() {
+    $('bar').style.width = '100%';
+    const prev = parseInt(store.get(bestKey()) || '0', 10);
+    const isNew = stars > prev;
+    if (isNew) store.set(bestKey(), String(stars));
+
+    const [mascot, title] =
+      stars === TOTAL ? ['🏆', '全對！數學小天才！'] :
+      stars >= 8 ? ['🦄', '太棒了！'] :
+      stars >= 5 ? ['🐼', '做得很好！'] : ['🐣', '繼續加油，你會越來越強！'];
+    $('rMascot').textContent = mascot;
+    $('rTitle').textContent = title;
+    $('rStars').textContent = '⭐'.repeat(stars) + '☆'.repeat(TOTAL - stars);
+    $('rScore').textContent = `一次就答對 ${stars} / ${TOTAL} 題`;
+    $('rBest').textContent = isNew && stars > 0 ? '🎊 新紀錄！' : (prev ? `最高紀錄：${Math.max(prev, stars)} ⭐` : '');
+    show('result');
+    if (stars >= 5) { confetti(); sfx.win(); }
+  }
+
+  function start(m) {
+    mode = m; idx = 0; stars = 0;
+    show('game');
+    render();
+  }
+
+  // 事件
+  document.querySelectorAll('[data-mode]').forEach(b => b.onclick = () => start(b.dataset.mode));
+  document.querySelectorAll('#levels .chip').forEach(c => c.onclick = () => {
+    level = +c.dataset.level;
+    document.querySelectorAll('#levels .chip').forEach(x => x.classList.toggle('on', x === c));
+    refreshBest();
+  });
+  $('quit').onclick = () => { show('home'); refreshBest(); };
+  $('toHome').onclick = () => { show('home'); refreshBest(); };
+  $('again').onclick = () => start(mode);
+
+  refreshBest();
+})();
+</script>
+</body>
+</html>
