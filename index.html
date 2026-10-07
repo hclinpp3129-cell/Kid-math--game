@@ -1,0 +1,205 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1">
+<title>Kids English Fun 小朋友英文樂園</title>
+<style>
+:root{--bg:#fff7e0;--ink:#3b2f5c;--card:#fff;--pink:#ff7aa8;--blue:#4cb8ff;--green:#5cd68a;--yellow:#ffc933;--purple:#a77bff;--red:#ff6b6b}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;height:100%}
+body{background:var(--bg);color:var(--ink);font-family:"Comic Sans MS","Chalkboard SE","PingFang TC","Microsoft JhengHei",system-ui,sans-serif;user-select:none}
+#app{max-width:720px;margin:0 auto;min-height:100%;padding:16px;display:flex;flex-direction:column;gap:14px}
+h1{margin:4px 0;text-align:center;font-size:clamp(26px,7vw,40px)}
+.sub{text-align:center;margin:0;font-size:18px}
+.top{display:flex;justify-content:space-between;align-items:center;gap:8px}
+.pill{background:var(--card);border-radius:999px;padding:6px 14px;font-weight:700;box-shadow:0 3px 0 rgba(0,0,0,.12)}
+button{font:inherit;color:inherit;border:0;cursor:pointer}
+.btn{background:var(--card);border-radius:20px;padding:14px;box-shadow:0 5px 0 rgba(0,0,0,.15);font-weight:700;font-size:20px;transition:transform .08s}
+.btn:active{transform:translateY(4px);box-shadow:0 1px 0 rgba(0,0,0,.15)}
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+.cat{display:flex;flex-direction:column;align-items:center;gap:4px;padding:18px 8px;color:#fff}
+.cat .e{font-size:54px;line-height:1}
+.cat small{font-size:15px;opacity:.95}
+.back{background:var(--card);border-radius:999px;padding:8px 16px;font-weight:700;box-shadow:0 3px 0 rgba(0,0,0,.12)}
+.big{font-size:clamp(110px,34vw,190px);line-height:1.1;text-align:center}
+.word{font-size:clamp(40px,12vw,64px);font-weight:800;text-align:center;margin:0}
+.zh{font-size:28px;text-align:center;margin:0}
+.panel{background:var(--card);border-radius:28px;padding:20px 12px;box-shadow:0 6px 0 rgba(0,0,0,.12);display:flex;flex-direction:column;gap:8px}
+.row{display:flex;gap:12px;justify-content:center}
+.row .btn{flex:1}
+.opts{display:grid;gap:12px}
+.opts.pics{grid-template-columns:repeat(3,1fr)}
+.opt{font-size:26px;padding:18px 8px}
+.opt.pic{font-size:clamp(54px,17vw,92px);padding:10px 4px;line-height:1.1}
+.opt.ok{background:var(--green);color:#fff;animation:pop .4s}
+.opt.no{background:var(--red);color:#fff;animation:shake .35s}
+@keyframes pop{50%{transform:scale(1.12)}}
+@keyframes shake{25%{transform:translateX(-8px)}75%{transform:translateX(8px)}}
+.bar{height:14px;background:#fff;border-radius:99px;overflow:hidden;box-shadow:inset 0 2px 0 rgba(0,0,0,.1)}
+.bar i{display:block;height:100%;background:var(--green);transition:width .3s}
+.stars{font-size:48px;text-align:center;letter-spacing:4px}
+.hint{text-align:center;font-size:18px;margin:0}
+.fly{position:fixed;font-size:32px;pointer-events:none;animation:fly 1.2s ease-out forwards;z-index:9}
+@keyframes fly{to{transform:translateY(-220px) rotate(40deg);opacity:0}}
+</style>
+</head>
+<body>
+<div id="app"></div>
+<script>
+// ===== Vocabulary: [emoji, English, 中文] =====
+const CATS = {
+  animals:{name:'Animals',zh:'動物',e:'🐶',color:'var(--pink)',items:[
+    ['🐶','dog','狗'],['🐱','cat','貓'],['🐭','mouse','老鼠'],['🐰','rabbit','兔子'],['🐻','bear','熊'],
+    ['🐼','panda','貓熊'],['🐨','koala','無尾熊'],['🐯','tiger','老虎'],['🦁','lion','獅子'],['🐮','cow','牛'],
+    ['🐷','pig','豬'],['🐸','frog','青蛙'],['🐵','monkey','猴子'],['🐔','chicken','雞'],['🐧','penguin','企鵝'],
+    ['🐦','bird','鳥'],['🦆','duck','鴨子'],['🦉','owl','貓頭鷹'],['🐴','horse','馬'],['🐘','elephant','大象'],
+    ['🦒','giraffe','長頸鹿'],['🦓','zebra','斑馬'],['🐊','crocodile','鱷魚'],['🐢','turtle','烏龜'],['🐍','snake','蛇'],
+    ['🐟','fish','魚'],['🐙','octopus','章魚'],['🐬','dolphin','海豚'],['🐳','whale','鯨魚'],['🦈','shark','鯊魚'],
+    ['🦀','crab','螃蟹'],['🐝','bee','蜜蜂'],['🦋','butterfly','蝴蝶'],['🐌','snail','蝸牛'],['🐑','sheep','綿羊'],
+    ['🦊','fox','狐狸'],['🐺','wolf','狼'],['🦘','kangaroo','袋鼠'],['🐪','camel','駱駝'],['🦔','hedgehog','刺蝟']]},
+  myth:{name:'Fairy Tale',zh:'神話童話',e:'🦄',color:'var(--purple)',items:[
+    ['🐉','dragon','龍'],['🦄','unicorn','獨角獸'],['🧚','fairy','精靈仙子'],['🧜','mermaid','美人魚'],['🧞','genie','燈神'],
+    ['🧙','wizard','巫師'],['🧝','elf','小精靈'],['👸','princess','公主'],['🤴','prince','王子'],['👑','crown','皇冠'],
+    ['🐦‍🔥','phoenix','鳳凰'],['👼','angel','天使'],['🎅','Santa Claus','聖誕老人'],['👻','ghost','幽靈'],['🧌','troll','巨魔'],
+    ['👽','alien','外星人'],['🤖','robot','機器人'],['🦸','superhero','超級英雄'],['🏰','castle','城堡'],['🪄','magic wand','魔法棒'],
+    ['🧛','vampire','吸血鬼'],['🎃','pumpkin lantern','南瓜燈'],['🐲','dragon head','龍頭'],['🔮','crystal ball','水晶球']]},
+  plants:{name:'Plants',zh:'植物',e:'🌻',color:'var(--green)',items:[
+    ['🌸','cherry blossom','櫻花'],['🌹','rose','玫瑰'],['🌻','sunflower','向日葵'],['🌷','tulip','鬱金香'],['🌼','daisy','雛菊'],
+    ['🌵','cactus','仙人掌'],['🌲','pine tree','松樹'],['🌳','tree','大樹'],['🌴','palm tree','棕櫚樹'],['🍀','clover','幸運草'],
+    ['🍁','maple leaf','楓葉'],['🍃','leaf','葉子'],['🌱','sprout','嫩芽'],['🌾','rice','稻米'],['🍄','mushroom','香菇'],
+    ['🎋','bamboo','竹子'],['🪴','potted plant','盆栽'],['🌿','herb','香草'],['🍎','apple','蘋果'],['🍌','banana','香蕉'],
+    ['🍓','strawberry','草莓'],['🍇','grapes','葡萄'],['🍉','watermelon','西瓜'],['🍊','orange','橘子'],['🥕','carrot','紅蘿蔔'],
+    ['🌽','corn','玉米'],['🍅','tomato','番茄'],['🥦','broccoli','花椰菜'],['🥔','potato','馬鈴薯'],['🍍','pineapple','鳳梨']]},
+  things:{name:'Things',zh:'物品',e:'⚽',color:'var(--blue)',items:[
+    ['⚽','ball','球'],['🚗','car','汽車'],['🚌','bus','公車'],['🚲','bicycle','腳踏車'],['✈️','airplane','飛機'],
+    ['🚢','ship','輪船'],['🚀','rocket','火箭'],['🚂','train','火車'],['🏠','house','房子'],['🪑','chair','椅子'],
+    ['🛏️','bed','床'],['🚪','door','門'],['🪟','window','窗戶'],['📖','book','書'],['✏️','pencil','鉛筆'],
+    ['🎒','backpack','書包'],['✂️','scissors','剪刀'],['🕒','clock','時鐘'],['☂️','umbrella','雨傘'],['👟','shoe','鞋子'],
+    ['👕','shirt','衣服'],['🧢','cap','帽子'],['👓','glasses','眼鏡'],['🔑','key','鑰匙'],['💡','light bulb','燈泡'],
+    ['📱','phone','手機'],['💻','computer','電腦'],['📺','television','電視'],['🎈','balloon','氣球'],['🎁','gift','禮物'],
+    ['🥄','spoon','湯匙'],['🍴','fork','叉子'],['🥛','milk','牛奶'],['🍞','bread','麵包'],['🍪','cookie','餅乾'],
+    ['🎂','cake','蛋糕'],['🍦','ice cream','冰淇淋'],['🪥','toothbrush','牙刷'],['🧸','teddy bear','泰迪熊']]},
+  nature:{name:'Sky & Colors',zh:'天空與顏色',e:'🌈',color:'var(--yellow)',items:[
+    ['☀️','sun','太陽'],['🌙','moon','月亮'],['⭐','star','星星'],['☁️','cloud','雲'],['🌧️','rain','下雨'],
+    ['⛄','snowman','雪人'],['❄️','snow','雪'],['🌈','rainbow','彩虹'],['⚡','lightning','閃電'],['🔥','fire','火'],
+    ['💧','water','水'],['🌊','wave','海浪'],['⛰️','mountain','山'],['🌍','earth','地球'],
+    ['🔴','red','紅色'],['🟠','orange color','橘色'],['🟡','yellow','黃色'],['🟢','green','綠色'],['🔵','blue','藍色'],
+    ['🟣','purple','紫色'],['⚫','black','黑色'],['⚪','white','白色'],['🟤','brown','咖啡色']]}
+};
+const ALL = {name:'Surprise Mix',zh:'大雜燴',e:'🎉',color:'var(--red)',
+  items:Object.values(CATS).flatMap(c=>c.items)};
+const $app=document.getElementById('app');
+let stars=0; try{stars=+localStorage.getItem('kidStars')||0}catch(e){}
+const saveStars=()=>{try{localStorage.setItem('kidStars',stars)}catch(e){}};
+const shuffle=a=>{a=[...a];for(let i=a.length-1;i>0;i--){const j=Math.random()*(i+1)|0;[a[i],a[j]]=[a[j],a[i]]}return a};
+
+// ===== Speech =====
+let voice=null;
+function pickVoice(){const v=speechSynthesis.getVoices();voice=v.find(x=>/en[-_]US/i.test(x.lang))||v.find(x=>/^en/i.test(x.lang))||null}
+if('speechSynthesis' in window){pickVoice();speechSynthesis.onvoiceschanged=pickVoice}
+function say(t){
+  if(!('speechSynthesis' in window))return;
+  speechSynthesis.cancel();
+  const u=new SpeechSynthesisUtterance(t);u.lang='en-US';u.rate=.8;u.pitch=1.1;if(voice)u.voice=voice;
+  speechSynthesis.speak(u);
+}
+// ===== Tiny sounds =====
+let ac;function beep(f,d=.15,type='sine'){try{ac=ac||new (window.AudioContext||window.webkitAudioContext)();
+  const o=ac.createOscillator(),g=ac.createGain();o.type=type;o.frequency.value=f;g.gain.value=.15;
+  o.connect(g);g.connect(ac.destination);o.start();g.gain.exponentialRampToValueAtTime(.001,ac.currentTime+d);o.stop(ac.currentTime+d)}catch(e){}}
+const good=()=>{beep(660,.12);setTimeout(()=>beep(880,.2),110)};
+const bad=()=>beep(200,.25,'square');
+function confetti(){
+  const em=['⭐','🎉','🌟','✨','🎈'];
+  for(let i=0;i<14;i++){const s=document.createElement('span');s.className='fly';s.textContent=em[i%5];
+    s.style.left=Math.random()*90+'vw';s.style.top=(50+Math.random()*40)+'vh';s.style.animationDelay=Math.random()*.3+'s';
+    document.body.appendChild(s);setTimeout(()=>s.remove(),1700)}
+}
+
+// ===== Screens =====
+function home(){
+  $app.innerHTML=`
+    <h1>🌈 Kids English Fun</h1>
+    <p class="sub">小朋友英文樂園・點一個主題開始玩！</p>
+    <div class="top"><span class="pill">⭐ ${stars}</span><span class="pill">🔊 點圖片會唸出來</span></div>
+    <div class="grid">${[...Object.entries(CATS),['all',ALL]].map(([k,c])=>
+      `<button class="btn cat" style="background:${c.color}" data-k="${k}"><span class="e">${c.e}</span>${c.name}<small>${c.zh}・${c.items.length}</small></button>`).join('')}
+    </div>`;
+  $app.querySelectorAll('[data-k]').forEach(b=>b.onclick=()=>menu(b.dataset.k));
+}
+function menu(k){
+  const c=k==='all'?ALL:CATS[k];
+  $app.innerHTML=`
+    <div class="top"><button class="back" id="b">⬅ 回首頁</button><span class="pill">⭐ ${stars}</span></div>
+    <h1>${c.e} ${c.name}</h1><p class="sub">${c.zh}</p>
+    <button class="btn" style="background:var(--yellow)" id="m1">🃏 學習卡片 Learn</button>
+    <button class="btn" style="background:var(--green);color:#fff" id="m2">👀 看圖選單字 Pick the word</button>
+    <button class="btn" style="background:var(--blue);color:#fff" id="m3">👂 聽音選圖片 Listen &amp; pick</button>`;
+  b.onclick=home;m1.onclick=()=>learn(k);m2.onclick=()=>quiz(k,'word');m3.onclick=()=>quiz(k,'listen');
+}
+function learn(k){
+  const c=k==='all'?ALL:CATS[k];const list=shuffle(c.items);let i=0;
+  const draw=()=>{const [e,w,z]=list[i];
+    $app.innerHTML=`
+      <div class="top"><button class="back" id="b">⬅ 返回</button><span class="pill">${i+1} / ${list.length}</span></div>
+      <div class="panel" id="card"><div class="big">${e}</div><p class="word">${w}</p><p class="zh">${z}</p>
+        <p class="hint">👆 點一下再聽一次</p></div>
+      <div class="row"><button class="btn" id="p">⬅ 上一個</button><button class="btn" style="background:var(--green);color:#fff" id="n">下一個 ➡</button></div>`;
+    b.onclick=()=>menu(k);card.onclick=()=>say(w);
+    p.onclick=()=>{i=(i-1+list.length)%list.length;draw()};
+    n.onclick=()=>{if(i===list.length-1){stars++;saveStars();confetti();good();menu(k);return}i++;draw()};
+    say(w);
+  };draw();
+}
+function quiz(k,mode){
+  const c=k==='all'?ALL:CATS[k];const N=8;
+  const qs=shuffle(c.items).slice(0,Math.min(N,c.items.length));
+  let i=0,score=0,tries=0;
+  const draw=()=>{
+    const [e,w,z]=qs[i];
+    const others=shuffle(c.items.filter(x=>x[1]!==w)).slice(0,2);
+    const opts=shuffle([qs[i],...others]);
+    const pct=i/qs.length*100;
+    const head=`<div class="top"><button class="back" id="b">✖ 離開</button><span class="pill">⭐ ${score}</span></div>
+      <div class="bar"><i style="width:${pct}%"></i></div>`;
+    if(mode==='word'){
+      $app.innerHTML=head+`
+        <div class="panel"><div class="big" id="pic">${e}</div><p class="zh">這是什麼？ What is it?</p></div>
+        <div class="opts">${opts.map(o=>`<button class="btn opt" data-w="${o[1]}">${o[1]}</button>`).join('')}</div>`;
+      pic.onclick=()=>say(w);
+    }else{
+      $app.innerHTML=head+`
+        <div class="panel"><button class="btn" id="sp" style="background:var(--yellow);font-size:34px">🔊 Listen</button>
+        <p class="zh">聽一聽，選出正確的圖片</p></div>
+        <div class="opts pics">${opts.map(o=>`<button class="btn opt pic" data-w="${o[1]}">${o[0]}</button>`).join('')}</div>`;
+      sp.onclick=()=>say(w);
+    }
+    b.onclick=()=>menu(k);
+    let wrong=false;
+    $app.querySelectorAll('.opt').forEach(btn=>btn.onclick=()=>{
+      if(btn.dataset.w===w){
+        btn.classList.add('ok');good();say(w);if(!wrong)score++;
+        $app.querySelectorAll('.opt').forEach(x=>x.onclick=null);
+        setTimeout(()=>{i++;i<qs.length?draw():finish()},1100);
+      }else{wrong=true;btn.classList.add('no');bad();setTimeout(()=>btn.classList.remove('no'),400)}
+    });
+    if(mode==='listen')setTimeout(()=>say(w),300);
+  };
+  const finish=()=>{
+    const ratio=score/qs.length;const s=ratio>=.9?3:ratio>=.6?2:1;
+    stars+=s;saveStars();confetti();
+    $app.innerHTML=`
+      <h1>🎉 太棒了！Great job!</h1>
+      <div class="panel"><div class="stars">${'⭐'.repeat(s)}${'☆'.repeat(3-s)}</div>
+      <p class="zh">答對 ${score} / ${qs.length}</p></div>
+      <button class="btn" style="background:var(--green);color:#fff" id="a">🔁 再玩一次</button>
+      <button class="btn" id="h">🏠 回選單</button>`;
+    a.onclick=()=>quiz(k,mode);h.onclick=()=>menu(k);
+  };
+  draw();
+}
+home();
+</script>
+</body>
+</html>
