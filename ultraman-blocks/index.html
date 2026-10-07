@@ -1,0 +1,411 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,user-scalable=no">
+<title>超人力霸王積木組合</title>
+<style>
+:root{--ink:#fff;--accent:#ffd23f;--panel:rgba(10,20,60,.65)}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0}
+body{min-height:100vh;color:var(--ink);font-family:"PingFang TC","Microsoft JhengHei","Noto Sans TC",sans-serif;
+  background:radial-gradient(circle at 50% 0%,#2f4cab,#0f1b3d 70%);display:flex;flex-direction:column;align-items:center;user-select:none;-webkit-user-select:none}
+header{width:100%;max-width:560px;padding:10px 14px 4px;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+h1{font-size:18px;margin:0;flex:1;min-width:160px}
+h1 small{display:block;font-size:12px;font-weight:400;opacity:.8}
+.stars{font-size:16px;color:var(--accent);font-weight:700}
+.bar{width:100%;max-width:560px;padding:0 14px 6px;display:flex;gap:8px}
+button{font:inherit;font-weight:700;border:0;border-radius:12px;padding:8px 12px;background:var(--accent);color:#3a2a00;cursor:pointer;box-shadow:0 3px 0 #b88a00}
+button:active{transform:translateY(2px);box-shadow:0 1px 0 #b88a00}
+button.ghostbtn{background:#3a53b8;color:#fff;box-shadow:0 3px 0 #22327a}
+svg#stage{width:min(100vw,560px,calc((100vh - 120px)*.5625));height:auto;touch-action:none;display:block}
+svg#stage.battle{width:min(100vw,560px)}
+.piece{cursor:grab;transition:transform .28s cubic-bezier(.3,1.4,.5,1)}
+.piece.dragging{transition:none;cursor:grabbing;filter:drop-shadow(0 8px 6px rgba(0,0,0,.45))}
+.piece.locked{cursor:default}
+.ghost{fill:rgba(255,255,255,.08);stroke:rgba(255,255,255,.55);stroke-width:2;stroke-dasharray:6 5}
+.ghosts-off .ghost{opacity:0}
+.ghost.hint,.ghosts-off .ghost.hint{opacity:1;stroke:var(--accent);stroke-width:3;animation:pulse .5s infinite alternate}
+.piece.hint{animation:pulse .5s infinite alternate}
+@keyframes pulse{to{opacity:.35}}
+@keyframes bob{50%{transform:translateY(-4px)}}
+.shake{animation:shake .4s}
+@keyframes shake{20%{transform:translateX(-6px)}40%{transform:translateX(6px)}60%{transform:translateX(-4px)}80%{transform:translateX(4px)}}
+#battle{display:none;width:100%;max-width:560px;padding:6px 14px 18px;text-align:center}
+#battle .q{font-size:34px;font-weight:800;margin:4px 0 10px;letter-spacing:2px}
+#battle .opts{display:flex;gap:12px;justify-content:center}
+#battle .opts button{font-size:28px;width:90px;padding:12px 0;border-radius:16px}
+#battle .opts button.wrong{background:#ff6b6b;box-shadow:0 3px 0 #a33;color:#fff;animation:shake .4s}
+.energy{display:flex;gap:8px;justify-content:center;margin:6px 0 8px;align-items:center;font-size:14px}
+.energy i{width:54px;height:16px;border-radius:8px;background:rgba(255,255,255,.2);display:block;transition:.3s}
+.energy i.on{background:linear-gradient(90deg,#4fd1ff,#fff);box-shadow:0 0 12px #4fd1ff}
+#msg{min-height:30px;font-size:20px;font-weight:700;color:var(--accent);margin:4px 0}
+#nextBtn{display:none;margin-top:6px;font-size:20px;padding:10px 22px}
+</style>
+</head>
+<body>
+<header>
+  <h1 id="title">超人力霸王積木組合<small id="sub"></small></h1>
+  <div class="stars" id="stars">⭐ 0</div>
+</header>
+<div class="bar">
+  <button id="hintBtn">💡 提示</button>
+  <button id="ghostBtn" class="ghostbtn">👁 輪廓:開</button>
+  <button id="resetBtn" class="ghostbtn">🔄 重來</button>
+</div>
+
+<svg id="stage" viewBox="0 0 360 640" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="sky" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#3a5bd0"/><stop offset="1" stop-color="#14224f"/></linearGradient>
+    <filter id="glow" x="-50%" y="-50%" width="200%" height="200%"><feGaussianBlur stdDeviation="4" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+  </defs>
+  <rect id="bg" width="360" height="640" fill="url(#sky)"/>
+  <g id="city" opacity=".35"></g>
+  <g id="ghostLayer"></g>
+  <g id="heroLayer" style="transform-origin:0 0"></g>
+  <g id="trayBg"></g>
+  <g id="monsterLayer"></g>
+  <g id="thumbLayer"></g>
+  <g id="freeLayer"></g>
+  <g id="fxLayer"></g>
+</svg>
+
+<div id="battle">
+  <div id="msg"></div>
+  <div class="energy"><span>⚡ 光線能量</span><i></i><i></i><i></i></div>
+  <div class="q" id="question"></div>
+  <div class="opts" id="opts"></div>
+  <button id="nextBtn">下一關 ▶</button>
+</div>
+
+<script>
+const NS='http://www.w3.org/2000/svg';
+const $=id=>document.getElementById(id);
+const el=(tag,attrs,parent)=>{const e=document.createElementNS(NS,tag);for(const k in attrs)e.setAttribute(k,attrs[k]);if(parent)parent.appendChild(e);return e;};
+const rand=(a,b)=>a+Math.floor(Math.random()*(b-a+1));
+const shuffle=a=>{for(let i=a.length-1;i>0;i--){const j=rand(0,i);[a[i],a[j]]=[a[j],a[i]];}return a;};
+
+/* ---------- 資料 ---------- */
+const HEROES=[
+  {name:'初代光之戰士',main:'#d92b2f',sub:'#dfe4ea',dark:'#7d1216',eye:'#ffe14a',timer:'#4fd1ff',max:10,ops:['+'],
+   monster:{name:'方塊怪獸・巴塔',color:'#8e5bd1',dark:'#5c349b'}},
+  {name:'藍色疾風戰士',main:'#2b62e0',sub:'#dfe4ea',dark:'#15357f',eye:'#ffe14a',timer:'#ff5a5a',max:15,ops:['+'],
+   monster:{name:'方塊怪獸・哥摩',color:'#3fae6a',dark:'#237a45'}},
+  {name:'黃金烈焰戰士',main:'#e8a914',sub:'#c9252b',dark:'#7a5300',eye:'#8ff0ff',timer:'#ffffff',max:20,ops:['+','-'],
+   monster:{name:'方塊魔王・卡',color:'#e2563a',dark:'#a02f18'}},
+];
+// 每塊積木在英雄身上的目標位置
+const PIECES=[
+  {id:'armL',x:72, y:118,w:45, h:120,z:1},
+  {id:'armR',x:243,y:118,w:45, h:120,z:1},
+  {id:'legL',x:130,y:268,w:50, h:140,z:1},
+  {id:'legR',x:180,y:268,w:50, h:140,z:1},
+  {id:'waist',x:130,y:212,w:100,h:52, z:2},
+  {id:'chest',x:120,y:116,w:120,h:92, z:3},
+  {id:'head', x:128,y:20, w:104,h:92, z:3},
+  {id:'timer',x:162,y:134,w:36, h:36, z:4},
+];
+
+/* ---------- 音效 ---------- */
+let ac;
+function beep(f=660,d=.12,type='sine',v=.12,delay=0){
+  try{ac=ac||new (window.AudioContext||window.webkitAudioContext)();
+    const o=ac.createOscillator(),g=ac.createGain(),t=ac.currentTime+delay;
+    o.type=type;o.frequency.value=f;g.gain.setValueAtTime(v,t);g.gain.exponentialRampToValueAtTime(.001,t+d);
+    o.connect(g);g.connect(ac.destination);o.start(t);o.stop(t+d);}catch(e){}
+}
+const sfx={
+  snap:()=>{beep(520,.1,'square',.08);beep(780,.14,'square',.08,.08)},
+  miss:()=>beep(180,.18,'sawtooth',.07),
+  ok:()=>{beep(660,.1);beep(880,.15,'sine',.12,.1)},
+  bad:()=>beep(160,.25,'sawtooth',.08),
+  beam:()=>{for(let i=0;i<10;i++)beep(300+i*70,.12,'sawtooth',.06,i*.05)},
+  win:()=>[523,659,784,1047].forEach((f,i)=>beep(f,.2,'triangle',.12,i*.13)),
+};
+
+/* ---------- 繪製積木 ---------- */
+function drawPiece(id,w,h,H,g){
+  const R=(x,y,ww,hh,fill,rx=0,ex={})=>el('rect',Object.assign({x,y,width:ww,height:hh,rx,fill},ex),g);
+  const body=(fill,rx=7)=>{
+    R(0,0,w,h,fill,rx,{stroke:H.dark,'stroke-width':2});
+    R(3,3,w-6,4,'rgba(255,255,255,.4)',2);
+  };
+  switch(id){
+    case 'armL':case 'armR':
+      body(H.main);
+      R(w*.32,10,w*.36,h-44,H.sub,3);
+      el('circle',{cx:w/2,cy:h-14,r:13,fill:H.sub,stroke:H.dark,'stroke-width':2},g);
+      el('circle',{cx:w/2,cy:h-14,r:5,fill:H.dark},g);
+      break;
+    case 'legL':case 'legR':
+      body(H.main);
+      R(w*.35,10,w*.3,h-62,H.sub,3);
+      R(0,h-38,w,38,H.sub,6,{stroke:H.dark,'stroke-width':2});
+      R(3,h-35,w-6,4,'rgba(255,255,255,.5)',2);
+      break;
+    case 'waist':
+      body(H.sub);
+      R(0,h*.32,w,h*.36,H.main,0,{stroke:H.dark,'stroke-width':2});
+      el('circle',{cx:w/2,cy:h/2,r:8,fill:H.timer,stroke:H.dark,'stroke-width':2},g);
+      break;
+    case 'chest':
+      body(H.main);
+      el('polygon',{points:`${w*.16},4 ${w*.36},4 ${w*.5},${h*.5} ${w*.64},4 ${w*.84},4 ${w*.5},${h*.88}`,fill:H.sub,stroke:H.dark,'stroke-width':1.5},g);
+      break;
+    case 'head':
+      body(H.sub,24);
+      el('polygon',{points:`${w*.43},-16 ${w*.57},-16 ${w*.6},3 ${w*.4},3`,fill:H.main,stroke:H.dark,'stroke-width':2},g);
+      [[.3,12],[.7,-12]].forEach(([fx,rot])=>{
+        const cx=w*fx,cy=h*.48;
+        el('ellipse',{cx,cy,rx:16,ry:10,fill:H.eye,stroke:H.dark,'stroke-width':2,transform:`rotate(${rot} ${cx} ${cy})`},g);
+      });
+      R(w*.38,h*.78,w*.24,4,H.dark,2);
+      break;
+    case 'timer':
+      el('circle',{cx:w/2,cy:h/2,r:w/2-1,fill:H.sub,stroke:H.dark,'stroke-width':2},g);
+      el('circle',{cx:w/2,cy:h/2,r:w/2-7,fill:H.timer},g);
+      el('circle',{cx:w/2-3,cy:h/2-3,r:3.5,fill:'rgba(255,255,255,.8)'},g);
+      break;
+  }
+}
+function drawHeroFull(parent,H){
+  PIECES.slice().sort((a,b)=>a.z-b.z).forEach(d=>{
+    const g=el('g',{transform:`translate(${d.x},${d.y})`},parent);drawPiece(d.id,d.w,d.h,H,g);
+  });
+}
+
+/* ---------- 遊戲狀態 ---------- */
+const svg=$('stage');
+const L={ghost:$('ghostLayer'),hero:$('heroLayer'),tray:$('trayBg'),monster:$('monsterLayer'),thumb:$('thumbLayer'),free:$('freeLayer'),fx:$('fxLayer'),city:$('city')};
+let level=0,phase='build',pieces={},lockedCount=0,drag=null,ghostsOn=true;
+let stars=0;try{stars=+localStorage.getItem('ultra-stars')||0}catch(e){}
+let charge=0,answer=0,busy=false;
+const clear=g=>{while(g.firstChild)g.removeChild(g.firstChild)};
+
+function setView(w,h){svg.setAttribute('viewBox',`0 0 ${w} ${h}`);$('bg').setAttribute('height',h);svg.classList.toggle('battle',h<640)}
+function updateStars(){$('stars').textContent='⭐ '+stars;try{localStorage.setItem('ultra-stars',stars)}catch(e){}}
+
+function drawCity(){
+  clear(L.city);
+  for(let i=0;i<9;i++){const w=rand(26,44),h=rand(60,150);
+    el('rect',{x:i*42-6,y:440-h,width:w,height:h,fill:'#0a1438'},L.city);
+    for(let y=440-h+8;y<430;y+=14)for(let x=i*42;x<i*42+w-10;x+=12)
+      if(Math.random()<.5)el('rect',{x,y,width:5,height:6,fill:'#ffe14a'},L.city);}
+}
+
+function startLevel(i){
+  level=i;phase='build';lockedCount=0;pieces={};drag=null;charge=0;busy=false;
+  const H=HEROES[i];
+  setView(360,640);
+  [L.ghost,L.hero,L.tray,L.monster,L.thumb,L.free,L.fx].forEach(clear);
+  L.hero.style.transition='none';L.hero.style.transform='';
+  $('battle').style.display='none';$('nextBtn').style.display='none';
+  document.querySelector('.bar').style.display='flex';
+  $('sub').textContent=`第 ${i+1} / ${HEROES.length} 關:${H.name}`;
+  drawCity();
+  // 英雄腳下地面
+  el('rect',{x:0,y:408,width:360,height:4,fill:'rgba(255,255,255,.15)'},L.ghost);
+  // 積木盒
+  el('rect',{x:8,y:436,width:344,height:196,rx:16,fill:'rgba(0,0,0,.3)',stroke:'rgba(255,255,255,.2)','stroke-width':2},L.tray);
+  const t=el('text',{x:180,y:454,'text-anchor':'middle',fill:'rgba(255,255,255,.55)','font-size':12},L.tray);t.textContent='把積木拖到英雄身上對的位置';
+  // 虛線輪廓
+  PIECES.forEach(d=>{
+    const e=d.id==='timer'?el('circle',{cx:d.x+d.w/2,cy:d.y+d.h/2,r:d.w/2,class:'ghost'},L.ghost)
+      :el('rect',{x:d.x,y:d.y,width:d.w,height:d.h,rx:7,class:'ghost'},L.ghost);
+    pieces[d.id]={d,ghost:e,locked:false};
+  });
+  svg.classList.toggle('ghosts-off',!ghostsOn);
+  // 縮圖(關閉輪廓時方便對照)
+  if(!ghostsOn){const tg=el('g',{transform:'translate(298,8) scale(.22)',opacity:.9},L.thumb);drawHeroFull(tg,H);}
+  // 積木散落在盒子裡
+  const order=shuffle(PIECES.map(p=>p.id));
+  order.forEach((id,n)=>{
+    const p=pieces[id],d=p.d;
+    const g=el('g',{class:'piece','data-id':id},L.free);
+    drawPiece(id,d.w,d.h,H,g);
+    p.g=g;p.s=Math.min(78/d.w,76/d.h,.65);
+    const cx=45+(n%4)*90+(Math.random()*6-3),cy=495+Math.floor(n/4)*92;
+    p.home={x:cx-d.w*p.s/2,y:cy-d.h*p.s/2};
+    place(p,p.home.x,p.home.y,p.s);
+  });
+}
+function place(p,x,y,s){p.g.style.transform=`translate(${x}px,${y}px) scale(${s})`}
+
+/* ---------- 拖曳 ---------- */
+function toSvg(e){const r=svg.getBoundingClientRect(),vb=svg.viewBox.baseVal;
+  return{x:(e.clientX-r.left)*vb.width/r.width,y:(e.clientY-r.top)*vb.height/r.height}}
+svg.addEventListener('pointerdown',e=>{
+  if(phase!=='build')return;
+  const g=e.target.closest('.piece');if(!g)return;
+  const p=pieces[g.dataset.id];if(p.locked)return;
+  svg.setPointerCapture(e.pointerId);
+  const pt=toSvg(e);drag={p};
+  g.classList.remove('hint');p.ghost.classList.remove('hint');
+  g.classList.add('dragging');L.free.appendChild(g);
+  place(p,pt.x-p.d.w/2,pt.y-p.d.h/2,1);
+  beep(440,.05,'sine',.05);
+});
+svg.addEventListener('pointermove',e=>{
+  if(!drag)return;const pt=toSvg(e),p=drag.p;
+  place(p,pt.x-p.d.w/2,pt.y-p.d.h/2,1);
+});
+const endDrag=e=>{
+  if(!drag)return;const p=drag.p;drag=null;
+  const pt=toSvg(e),d=p.d;
+  p.g.classList.remove('dragging');
+  const dist=Math.hypot(pt.x-(d.x+d.w/2),pt.y-(d.y+d.h/2));
+  if(dist<42){lock(p)}
+  else{
+    // 放到了別的積木位置也只是彈回去
+    if(pt.y<430)sfx.miss();
+    place(p,p.home.x,p.home.y,p.s);
+  }
+};
+svg.addEventListener('pointerup',endDrag);
+svg.addEventListener('pointercancel',endDrag);
+
+function lock(p){
+  const d=p.d;p.locked=true;lockedCount++;
+  p.g.classList.add('locked');p.g.setAttribute('data-z',d.z);
+  place(p,d.x,d.y,1);
+  L.hero.appendChild(p.g);
+  [...L.hero.children].sort((a,b)=>a.dataset.z-b.dataset.z).forEach(c=>L.hero.appendChild(c));
+  p.ghost.style.display='none';
+  sfx.snap();spark(d.x+d.w/2,d.y+d.h/2,8);
+  if(lockedCount===PIECES.length)setTimeout(buildDone,500);
+}
+
+function spark(x,y,n=10,colors=['#ffd23f','#fff','#4fd1ff']){
+  for(let i=0;i<n;i++){
+    const c=el('circle',{cx:x,cy:y,r:rand(2,5),fill:colors[i%colors.length]},L.fx);
+    const a=Math.random()*6.28,r=rand(25,70);
+    c.animate([{transform:'translate(0,0)',opacity:1},{transform:`translate(${Math.cos(a)*r}px,${Math.sin(a)*r}px)`,opacity:0}],{duration:700,easing:'ease-out'}).onfinish=()=>c.remove();
+  }
+}
+
+/* ---------- 提示 / 控制 ---------- */
+$('hintBtn').onclick=()=>{
+  if(phase!=='build')return;
+  const rest=Object.values(pieces).filter(p=>!p.locked);if(!rest.length)return;
+  const p=rest[rand(0,rest.length-1)];
+  p.g.classList.add('hint');p.ghost.classList.add('hint');
+  setTimeout(()=>{p.g.classList.remove('hint');p.ghost.classList.remove('hint')},2500);
+};
+$('ghostBtn').onclick=()=>{ghostsOn=!ghostsOn;$('ghostBtn').textContent='👁 輪廓:'+(ghostsOn?'開':'關');startLevel(level)};
+$('resetBtn').onclick=()=>startLevel(level);
+
+/* ---------- 組合完成 → 戰鬥 ---------- */
+function buildDone(){
+  phase='battle';
+  const H=HEROES[level];
+  sfx.win();
+  // 彩帶
+  for(let i=0;i<30;i++)spark(rand(40,320),rand(40,300),1,['#ffd23f','#ff5a5a','#4fd1ff','#7dff8a','#fff']);
+  const t=el('text',{x:180,y:240,'text-anchor':'middle','font-size':34,'font-weight':800,fill:'#ffd23f',stroke:'#7a5300','stroke-width':1.5},L.fx);
+  t.textContent='組合完成!';
+  t.animate([{transform:'scale(.3)',opacity:0},{transform:'scale(1.2)',opacity:1},{transform:'scale(1)',opacity:1}],{duration:500,fill:'forwards'});
+  t.style.transformOrigin='180px 240px';t.style.transformBox='view-box';
+  setTimeout(()=>{t.remove();startBattle()},1600);
+}
+
+function startBattle(){
+  const H=HEROES[level],M=H.monster;
+  [L.tray,L.thumb,L.free,L.ghost].forEach(clear);
+  document.querySelector('.bar').style.display='none';
+  setView(360,460);
+  L.hero.style.transition='transform .6s ease';
+  L.hero.style.transform='translate(8px,120px) scale(.62)';
+  el('rect',{x:0,y:376,width:360,height:84,fill:'#0b1230'},L.ghost);
+  el('rect',{x:0,y:376,width:360,height:3,fill:'rgba(255,255,255,.25)'},L.ghost);
+  drawMonster(M);
+  $('battle').style.display='block';
+  $('msg').textContent=`出現了「${M.name}」!答對題目充填光線!`;
+  charge=0;busy=false;updateEnergy();newQuestion();
+}
+
+function drawMonster(M){
+  clear(L.monster);
+  const mk=(x,y,w,h,cls)=>{const g=el('g',{class:'mblock'},L.monster);
+    el('rect',{x,y,width:w,height:h,rx:8,fill:M.color,stroke:M.dark,'stroke-width':3},g);
+    el('rect',{x:x+4,y:y+4,width:w-8,height:5,rx:2,fill:'rgba(255,255,255,.3)'},g);return g};
+  mk(205,326,134,50);
+  const mid=mk(220,276,104,50);
+  el('polygon',{points:'250,300 272,286 294,300 272,316',fill:M.dark},mid);
+  const head=mk(226,218,92,58);
+  [[246,'rotate(0)'],[298,'']].forEach(([cx])=>{
+    el('circle',{cx,cy:240,r:11,fill:'#fff',stroke:M.dark,'stroke-width':2},head);
+    el('circle',{cx:cx-2,cy:242,r:5,fill:'#111'},head);});
+  el('polygon',{points:'232,224 258,232 258,236 232,230',fill:M.dark},head);
+  el('polygon',{points:'312,224 286,232 286,236 312,230',fill:M.dark},head);
+  el('polyline',{points:'246,262 255,255 264,262 273,255 282,262 291,255',fill:'none',stroke:'#fff','stroke-width':3,'stroke-linejoin':'round'},head);
+  // 角
+  const hn=el('g',{class:'mblock'},L.monster);
+  el('polygon',{points:'236,218 244,196 254,218',fill:'#ffe14a',stroke:M.dark,'stroke-width':2},hn);
+  el('polygon',{points:'290,218 300,196 308,218',fill:'#ffe14a',stroke:M.dark,'stroke-width':2},hn);
+}
+
+/* ---------- 數學題 ---------- */
+function updateEnergy(){document.querySelectorAll('.energy i').forEach((e,i)=>e.classList.toggle('on',i<charge))}
+function newQuestion(){
+  const H=HEROES[level];
+  const op=H.ops[rand(0,H.ops.length-1)];let a,b,ans;
+  if(op==='+'){a=rand(1,H.max-1);b=rand(1,H.max-a);ans=a+b}
+  else{a=rand(5,H.max);b=rand(1,a-1);ans=a-b}
+  answer=ans;
+  $('question').textContent=`${a} ${op==='+'?'+':'−'} ${b} = ?`;
+  const opts=new Set([ans]);
+  while(opts.size<3){const v=ans+rand(-3,3);if(v>=0&&v!==ans)opts.add(v)}
+  const box=$('opts');box.innerHTML='';
+  shuffle([...opts]).forEach(v=>{
+    const b=document.createElement('button');b.textContent=v;b.onclick=()=>choose(v,b);box.appendChild(b)});
+}
+function choose(v,btn){
+  if(busy)return;
+  if(v===answer){
+    charge++;updateEnergy();sfx.ok();
+    const p=HEROES[level];
+    spark(120,214,10,[p.timer,'#fff']);
+    if(charge>=3){busy=true;$('opts').innerHTML='';$('question').textContent='⚡⚡⚡';$('msg').textContent='能量全滿!發射光線!';setTimeout(fire,600)}
+    else{$('msg').textContent=['答對了!','太棒了!','好厲害!'][rand(0,2)];newQuestion()}
+  }else{
+    sfx.bad();btn.classList.add('wrong');$('msg').textContent='再想一想,你可以的!';
+    setTimeout(()=>btn.classList.remove('wrong'),400);
+  }
+}
+
+function fire(){
+  const H=HEROES[level],M=H.monster;sfx.beam();
+  const beam=el('g',{filter:'url(#glow)'},L.fx);
+  const l1=el('line',{x1:120,y1:214,x2:120,y2:214,stroke:H.timer==='#ffffff'?'#ffe14a':H.timer,'stroke-width':20,'stroke-linecap':'round'},beam);
+  const l2=el('line',{x1:120,y1:214,x2:120,y2:214,stroke:'#fff','stroke-width':8,'stroke-linecap':'round'},beam);
+  let t=0;const target={x:232,y:280};
+  const step=()=>{t+=.08;const k=Math.min(t,1);
+    [l1,l2].forEach(l=>{l.setAttribute('x2',120+(target.x-120)*k);l.setAttribute('y2',214+(target.y-214)*k)});
+    if(k<1)requestAnimationFrame(step);else hit(beam)};
+  requestAnimationFrame(step);
+}
+function hit(beam){
+  const M=HEROES[level].monster;
+  spark(260,290,24,['#fff','#ffd23f','#ff7a3a']);
+  L.monster.animate([{transform:'translateX(-6px)'},{transform:'translateX(6px)'}],{duration:70,iterations:8,direction:'alternate'});
+  setTimeout(()=>{
+    beam.remove();
+    document.querySelectorAll('.mblock').forEach((g,i)=>{
+      const dx=rand(-80,120),dy=rand(-60,70),r=rand(-90,90);
+      g.style.transformBox='fill-box';g.style.transformOrigin='center';
+      g.animate([{transform:'none',opacity:1},{transform:`translate(${dx}px,${dy}px) rotate(${r}deg)`,opacity:0}],{duration:900,fill:'forwards',easing:'ease-out'});
+    });
+    spark(270,290,30);sfx.win();
+    stars++;updateStars();
+    $('msg').textContent=`打倒了「${M.name}」!獲得 ⭐ 1`;
+    $('question').textContent='🎉 勝利!';
+    $('nextBtn').textContent=level<HEROES.length-1?'下一關 ▶':'全部通關!再玩一次 🔁';
+    $('nextBtn').style.display='inline-block';
+  },700);
+}
+$('nextBtn').onclick=()=>startLevel((level+1)%HEROES.length);
+
+updateStars();startLevel(0);
+</script>
+</body>
+</html>
